@@ -25,17 +25,25 @@ def main():
             token.write(creds.to_json())
 
     try:
+        # create drive api client
         service = build('drive', 'v3', credentials=creds)
 
-        results = service.files().list().execute()
-        items = results.get("files", [])
-        
-        # Iterate over all dirs and files recursivly
-        for item in items: 
-            print(item['name'])
+        # Search for public files
+        query = "visibility='anyoneCanFind' or visibility='anyoneWithLink'"
+        try:
+            results = service.files().list(q=query,
+                                            fields='nextPageToken, '
+                                            'files(id, name, createdTime)'
+                                            ).execute()
+            files = results.get("files", [])
+            for file in files:
+                print(f'{file["name"]}, Created Time: {file["createdTime"]}')
+
+        except HttpError as error:
+            print(f'{error}')
 
     except HttpError as error:
-        print(f'An error occurred: {error}')
+        print(f'{error}')
 
 if __name__ == '__main__':
     main()
