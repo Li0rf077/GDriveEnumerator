@@ -1,24 +1,41 @@
 ### IMPORTS ###
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
+import os.path
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+### GLOBALS ###
+SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly']
 
 def main():
-    
-    gauth = GoogleAuth()
-    gauth.LocalWebserverAuth() 
-    drive = GoogleDrive(gauth)
-    file_list = drive.ListFile({'q': "mimeType='application/vnd.google-apps.folder'"}).GetList()
-    for folder in file_list:
-        folder_id = folder['id']
-        # Search for files in the folder
-        file_list = drive.ListFile({'q': f"'{folder_id}' in parents"}).GetList()
+    # Generate token and allow the app to access the user's GDrive account
+    creds = None
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
 
-        # Check the sharing status of each new file
-        for file in file_list:
-           if file['shared']:
-                print(f"File: {file['title']} is publicly accessible. Changing to private.")
-                file.DeletePermission({'role': 'reader', 'type': 'anyone'})
-                print("File permission changed to private")
+    try:
+        service = build('drive', 'v3', credentials=creds)
+
+        results = service.files().list().execute()
+        items = results.get("files", [])
+        
+        # Iterate over all dirs and files recursivly
+        for item in items: 
+            print(item['name'])
+
+    except HttpError as error:
+        print(f'An error occurred: {error}')
 
 if __name__ == '__main__':
     main()
