@@ -31,39 +31,44 @@ def main():
         # Get the email address of the current user
         about = service.about().get(fields='user').execute()
         user_email = about["user"]["emailAddress"]
+        
+        # Keep track of the last checked file
+        last_checked_file = None
 
-        # Search query for public folders owned by the user
-        query = "mimeType='application/vnd.google-apps.folder' and (visibility='anyoneWithLink' or visibility='anyoneCanFind') and 'me' in owners"
-        try:
-            results = service.files().list(q=query,
+        # Continuously check for new files
+        while True:
+            # Search query for public folders owned by the user
+            query = "mimeType='application/vnd.google-apps.folder' and (visibility='anyoneWithLink' or visibility='anyoneCanFind') and 'me' in owners"
+            try:
+                results = service.files().list(q=query,
                                             fields='nextPageToken, '
                                             'files(id, name)'
                                             ).execute()
-            files = results.get("files", [])
+                files = results.get("files", [])
+                for file in files:
+                    # Check if this file is a new file
+                    if last_checked_file is None or file["id"] != last_checked_file:
+                        last_checked_file = file["id"]
+                        # Extract visibility type
+                        permissions = service.permissions().list(fileId=last_checked_file).execute()
+                        visibility = permissions['permissions'][0]['id']
 
-            for file in files:
-                file_id = file['id']
+                        try:                
+                            # Remove existing visibility
+                            service.permissions().delete(fileId=last_checked_file, permissionId=visibility).execute()
+
+                            # Change the visibility to the current user
+                            new_permission = {'type': 'user', 'role': 'owner', 'emailAddress': user_email}
+                            service.permissions().create(fileId=last_checked_file, body=new_permission, transferOwnership=True).execute()
+
+                            # Notify about visibility change
+                            print(f'Visibility for file {file["name"]} has been changed to PRIVATE from {visibility}.')
                 
-                # Extract visibility type
-                permissions = service.permissions().list(fileId=file_id).execute()
-                visibility = permissions['permissions'][0]['id']
+                        except HttpError as error:
+                            print(f'{error}')
 
-                try:                
-                    # Remove existing visibility
-                    service.permissions().delete(fileId=file_id, permissionId=visibility).execute()
-
-                    # Change the visibility to the current user
-                    new_permission = {'type': 'user', 'role': 'owner', 'emailAddress': user_email}
-                    service.permissions().create(fileId=file_id, body=new_permission, transferOwnership=True).execute()
-
-                    # Notify about visibility change
-                    print(f'Visibility for file {file["name"]} has been changed to PRIVATE from {visibility}.')
-
-                except HttpError as error:
-                    print(f'{error}')
-
-        except HttpError as error:
-            print(f'{error}')
+            except HttpError as error:
+                print(f'{error}')
 
     except HttpError as error:
         print(f'{error}')
