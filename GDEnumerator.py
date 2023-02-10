@@ -7,11 +7,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 ### GLOBALS ###
-SCOPES = ['https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/drive.metadata']
+SCOPES = ['https://www.googleapis.com/auth/drive']
 
-def change_scope(file):
-    pass
 def main():
+    
     # Generate token and allow the app to access the user's GDrive account
     creds = None
     if os.path.exists('token.json'):
@@ -33,12 +32,12 @@ def main():
         about = service.about().get(fields='user').execute()
         user_email = about["user"]["emailAddress"]
 
-        # Search for public files
+        # Search query for public folders owned by the user
         query = "mimeType='application/vnd.google-apps.folder' and (visibility='anyoneWithLink' or visibility='anyoneCanFind') and 'me' in owners"
         try:
             results = service.files().list(q=query,
                                             fields='nextPageToken, '
-                                            'files(id, name, createdTime, mimeType)'
+                                            'files(id, name)'
                                             ).execute()
             files = results.get("files", [])
 
@@ -47,18 +46,18 @@ def main():
                 
                 # Extract visibility type
                 permissions = service.permissions().list(fileId=file_id).execute()
-                permissionid = permissions['permissions'][0]['id']
+                visibility = permissions['permissions'][0]['id']
 
                 try:                
                     # Remove existing visibility
-                    service.permissions().delete(fileId=file_id, permissionId=permissionid).execute()
+                    service.permissions().delete(fileId=file_id, permissionId=visibility).execute()
 
-                    # Add a new permission with role 'owner'
+                    # Change the visibility to the current user
                     new_permission = {'type': 'user', 'role': 'owner', 'emailAddress': user_email}
                     service.permissions().create(fileId=file_id, body=new_permission, transferOwnership=True).execute()
 
-                    # Notify about permission change
-                    print(f'Visibility for file {file["name"]} has been changed to PRIVATE from {permissionid}.')
+                    # Notify about visibility change
+                    print(f'Visibility for file {file["name"]} has been changed to PRIVATE from {visibility}.')
 
                 except HttpError as error:
                     print(f'{error}')
