@@ -40,7 +40,7 @@ def monitor(service, user_email):
     # Continuously check for new files
     while True:
         # Search query for public folders owned by the user
-        query = "mimeType='application/vnd.google-apps.folder' and (visibility='anyoneWithLink' or visibility='anyoneCanFind') and 'me' in owners"
+        query = "(visibility='anyoneWithLink' or visibility='anyoneCanFind') and 'me' in owners"
         try:
             results = service.files().list(q=query,
                                         fields='nextPageToken, '
